@@ -48,15 +48,42 @@ const getData = async(req, res) => {
   try {
   
     const { companyName } = req.params;
-    const limiting = parseInt(req.query.limit) || 0;
-    
-    await Company.aggregate([
-      {
-        $sort : {companyName : -1 }
+    const limiting = parseInt(req.query.limit) || 10;
+    const page = parseInt(req.query.page) || 1;
+    const sort = req.query.sort || 'companyName';
+    const sortOrder = req.query.sortOrder === 'asc' ? 1 : -1;
+    const search = req.query.search || '';
+
+    const searchQuery = {
+      $match: {
+        $and: [
+          { companyName: { $regex: companyName, $options: 'i' } },
+          {
+            $or: [
+              { companyName: { $regex: search, $options: 'i' } },
+              { country: { $regex: search, $options: 'i' } },
+            ],
+          },
+        ],
       },
-      // { $match : {companyName}},
-      {$limit : limiting}
-     ])
+    };
+
+    const sortQuery = {
+      $sort: { [sort]: sortOrder },
+    };
+
+    const paginationQuery = [
+      { $skip: (page - 1) * limiting },
+      { $limit: limiting },
+    ];
+
+    const aggregationPipeline = [
+      searchQuery,
+      sortQuery,
+      ...paginationQuery,
+    ];
+
+    await Company.aggregate(aggregationPipeline)
      .then(response => {
       return res.json({ data: response, msg : "Fetched all data successfully!" });
   })
